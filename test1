@@ -1,0 +1,752 @@
+nalizando nuestra sesión
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+options(digits=3,papersize = "letter")  
+# https://stat.ethz.ch/R-manual/R-devel/library/base/html/options.html
+
+
+# Opciones globales en graficas
+par(mar=c(5.1,5,4.1,2.1),font=3,family="sans",bg="yellow")   
+
+# En R existen varios conjuntos de datos:
+
+# install.packages("datasets.load")
+# datasets.load::alldata()   # O bien library(datasets.load); alldata()
+
+# data(package = .packages(all.available = TRUE)) 
+# Si marca error en la version de "htmltools", instalarlo de nuevo.
+# R sugerira el reinicio de su sesion, aceptarla.
+
+```
+
+# Problema a estudiar
+
+Se tienen las mediciones de la calidad diaria del aire en la ciudad de Nueva York desde Mayo hasta Septiembre de 1973.
+
+Las variables que se registraron son:
+
+* Ozone: medición del ozono en partes por billón (ppb) en la isla de Roosevelt
+La medición de la concentración de ozono en el aire se puede
+efectuar mediante diferentes técnicas e instrumental como los monitores automáticos de absorción ultravioleta.
+* Solar.R: 	radiación solar (en Langleys) medida en la banda de frecuencia de 4000-7700 Angstroms al mediodía en Central Park.
+*	Wind: velocidad media del viento (mph) entre las 7-10 am en el aeropuerto de LaGuardia.
+* Temp: temperatura máxima diaria (en °F)	
+* Month	numeric	Month (1--12)
+* Day	numeric	Day of month (1--31)
+
+
+
+## Lectura y manejo de datos
+
+Antes de realizar el análisis estadístico más adecuado es conveniente revisar:
+
+1. Que la información de todas las variables sea completa
+2. Que nuestra elección esté de acuerdo con el tipo de variable y su escala de medición para ¡no meter la pata!
+
+````{r, include=TRUE}
+
+library(datasets)
+data("airquality")   # ver el conjunto de datos de interes
+
+datos1<- airquality  # para guardarlos como objeto
+
+head(datos1)    # ver los primeros 6 renglones del conjunto de datos
+tail(datos1)    # ver los ultimos 6 renglones del conjunto de datos
+dim(datos1)
+names(datos1)
+str(datos1)
+mode(datos1)
+
+# Exploremos algunas variables
+
+datos1$Temp   # llamamos a la variable "Temp"
+datos1[,3] # da la columna 3
+
+datos1[3,] # da el renglon 3
+
+datos1[1:10,3:6]  # para seleccionar una parte de los datos
+
+# COMENTARIO: Si llamamos a la variable solo por su nombre, es decir, Temp y luego operamos con ella, por ejemplo, Temp+12
+# MARCARA ERROR AL TEJER!
+
+# Solucion.....
+
+attach(datos1) # con el attach ya puedo accesar a los nombres de las variables
+
+Temp
+
+(Temp-32)*(5/9)  # Centigrados
+
+# OJO: el problema con attach es que si manejo 2 o mas bases de datos 
+# distintas, y estas comparten el mismo nombre de las columnas, R se 
+# hace bolas y no sabra exactamente a que base de datos se refiere.
+
+#detach(datos1) # para decirle a R que ya NO usare esa base de datos
+
+````
+
+Antes de realizar el análisis descriptivo, limpiemos, ordenemos y cambiemos el nombre de las variables.
+
+````{r}
+# install.packages("dplyr")  # hacerlo por fuera
+library(dplyr)
+
+datos1<- select(datos1, Month, Day, Ozone, Temp, Solar.R, Wind)
+
+#        NUEVO                 # ANTERIOR
+datos2<- rename(datos1, Ozono       = Ozone,
+       Radiacion  = Solar.R,
+       Viento     = Wind,
+       Temperatura= Temp,
+       Mes        = Month,
+       Dia        = Day)
+
+names(datos2)
+attach(datos2)  # para que reconozca las variables solo por su nombre,
+                # de lo contrario hay que escribir datos2$Viento
+
+````
+
+Revisión "rápida" del conjunto de datos:
+
+````{r}
+
+# install.packages("skimr")
+skimr::skim(datos2)
+
+````
+
+Vamos a crear una variable cualitativa para la velocidad del viento basada en la escala de Beaufort.
+
+Velocidad del viento (km/h)   |  Descripción EU
+------------------------------|------------------------------
+     	$0-1$                   |    Calma	
+	    $2-5$	                  |    Ventolina	
+	    $6-11$	                |    Brisa suave	
+	    $12-19$	                |    Brisa ligera		
+	    $20-28$	                |    Brisa moderada		
+	    $29-38$	                |    Brisa fresca		
+	    $39-49$	                |    Brisa fuerte		
+	    $50-61$	                |    Viento fuerte		
+	    $62-74$	                |    Viento duro	
+	    $75-88$	                |    Viento muy duro	
+	    $89-102$	              |    Temporal		
+	    $103-117$	              |    Temporal muy duro (borrasca)
+	     $> 118$	              |    Huracán	
+
+````{r}
+
+TipoViento <- NA
+TipoViento[Viento >= 0 & Viento <= 1.6093] <- "Calma"   
+TipoViento[Viento > 1.6093 & Viento <= 1.6093*5] <- "Ventolina"  
+TipoViento[Viento > 1.6093*5 & Viento <= 1.6093*11] <- "Brisa suave"    
+TipoViento[Viento > 1.6093*11 & Viento <= 1.6093*19] <- "Brisa ligera" 
+TipoViento[Viento > 1.6093*19 & Viento <= 1.6093*28] <- "Brisa moderada" 
+TipoViento[Viento > 1.6093*28 & Viento <= 1.6093*38] <- "Brisa fresca"
+
+TipoViento
+
+# Ahora si ordenamos las columnas
+datos2<- cbind(datos2,TipoViento)
+
+datos<- select(datos2, Mes, Ozono)  # library(dplyr)
+
+head(datos)
+````
+
+Examinemos si hay datos faltantes.
+
+````{r}
+library(naniar)
+
+pct_miss(datos2)
+
+vis_miss(datos2) 
+
+````
+
+
+## Tipo de variable y escala de medición
+
+### Identificación de las variables
+
+Variable    | Tipo                   | Escala de medición
+------------|------------------------|--------------------
+Mes         | cualitativa            | nominal
+Dia         | cualitativa            | nominal
+Ozono       | cuantitativa/continua  | razón
+Temperatura | cuantitativa/continua  | intervalo
+Radiacion   | cuantitativa/continua  | razón
+Viento      | cuantitativa/continua  | razón
+TipoViento  | cualitativa            | ordinal    
+
+
+
+## Análisis estadístico de las variables cualitativas
+
+### TipoViento
+
+#### Análisis tabular y gráfico
+
+Basándonos en la distribución de frecuencias,
+
+
+````{r}
+# Tabla de frecuencias
+
+(tabla_tv <- table(TipoViento))  # tabla de frecuencias absolutas
+
+(tablar_tv <- round(prop.table(tabla_tv),digits=2)) # tabla de frecuencias relativas
+
+# otra forma de obtener las marginales:
+
+levels(as.factor(TipoViento))
+
+(f.relativa_tv<- c(sum(TipoViento=="Brisa ligera")/nrow(datos2),
+sum(TipoViento=="Brisa suave")/nrow(datos2),
+sum(TipoViento=="Ventolina")/nrow(datos2)))
+
+````
+
+En resumen:
+
+````{r}
+# Tabla de frecuencias completa
+
+tabla.frec_tv<- matrix(cbind(tabla_tv[1],tabla_tv[2],tabla_tv[3],
+                              sum(tabla_tv), tablar_tv[1],tablar_tv[2],tablar_tv[3],sum(tablar_tv)),
+                    byrow=T,nrow = 2,ncol=4)
+colnames(tabla.frec_tv)<- c("Brisa ligera","Brisa suave","Ventolina","Totales")
+rownames(tabla.frec_tv)<- c("fi","pi")
+tabla.frec_tv
+````
+
+
+
+````{r}
+
+# Diagrama de barras
+barplot(tabla_tv,names.arg=c("Brisa ligera","Brisa suave","Ventolina"),col=c(3,32,28),ylim=c(0,120))
+title("Tipo de viento \n (Frecuencias Absolutas)")
+
+barplot(tablar_tv,names.arg=c("Brisa ligera","Brisa suave","Ventolina"),col=3:5,ylim=c(0,0.8))
+title("Tipo de viento \n (Frecuencias Relativas)")
+
+# Diagrama Circular
+
+pie(tabla_tv,labels=paste(c("Brisa ligera","Brisa suave","Ventolina"),tabla_tv,sep=": "),col=5:7,radius=1)
+title("Tipo de viento \n (Frecuencias absolutas)")   # \n para escribir en otro renglon
+
+pie(tablar_tv,labels=paste(c("Brisa ligera","Brisa suave","Ventolina"),tablar_tv,sep=": "),col=5:7,radius=1)
+title("Tipo de viento \n (Frecuencias relativas)")   
+
+````
+
+#### Medidas descriptivas
+
+Sólo tienen sentido: **moda** y **mediana (o cualquier porcentil)**
+
+1. Moda:
+
+````{r}
+
+library(fdth)
+mfv(TipoViento)     
+
+````
+
+
+2. Mediana (porcentiles en general)
+
+Esta variable es ordinal por lo que tiene sentido utilizar esta medida de resumen, sin embargo no se podrá calcular a menos que las categorías tengan asignado un número.
+
+````{r}
+
+Tipo <- NA
+Tipo[TipoViento=="Brisa ligera"] <- 1   
+Tipo[TipoViento=="Brisa suave"] <- 2
+Tipo[TipoViento=="Ventolina"] <- 3
+
+Tipo[1:10]   # primeros 10 datos
+
+median(Tipo); median(TipoViento)
+
+quantile(Tipo,prob=c(0.10,0.25,0.5,0.75)) 
+
+````
+
+## Análisis estadístico de las variables cuantitativas
+
+Ante la ausencia de variables discretas en este conjunto de datos y con la finalidad de mostrar el análisis en R de este tipo de variable, construiremos nuestra variable.
+
+````{r datos sinteticos}
+
+# El numero de estaciones que midieron ese dia la concentracion # de ozono es:
+
+set.seed(052022)
+num.estac<- sample(c(rep(12,35),rep(20,55),rep(4,3),rep(35,60)),replace = F,size=153)
+
+````
+
+
+### Número de estaciones ("num.estac")
+
+
+#### Análisis tabular y gráfico
+Se trata de una variable discreta. Así que podemos presentar su resumen mediante una distribución de frecuencias como la correspondiente a una variable cualitativa.
+
+
+````{r}
+# Tabla de frecuencias
+
+(tabla_estac <- table(num.estac))  # tabla de frecuencias absolutas
+
+(tablar_estac <- round(prop.table(tabla_estac),digits=2)) # tabla de frecuencias relativas
+
+````
+
+En resumen:
+
+````{r}
+# Tabla de frecuencias completa
+
+tabla.frec_estac<-round( matrix(cbind(tabla_estac[1],tabla_estac[2],
+                                tabla_estac[3], tabla_estac[4],
+                                sum(tabla_estac),                                tablar_estac[1],tablar_estac[2],                                tablar_estac[3], tablar_estac[4],                                sum(tablar_estac)),                    byrow=T,nrow = 2,ncol=5),digits=2)
+colnames(tabla.frec_estac)<- c("1","2","3","4","Totales")
+rownames(tabla.frec_estac)<- c("fi","pi")
+tabla.frec_estac
+
+````
+
+Veamos la distribución del número de estaciones.
+
+````{r}
+par(mfrow=c(1,2))
+barplot(tabla_estac)  # frecuencias absolutas
+title("Diagrama de barras (número de estaciones) \n (Frecuencias absolutas)")
+
+barplot(tablar_estac,col=c(10:20))   # frecuencias relativas
+title("Diagrama de barras (número de estaciones) \n (Frecuencias relativas)")
+
+
+````
+
+¿Qué pasa si a la "ingenua" graficamos un histograma?
+
+````{r}
+hist(num.estac,probability=TRUE)
+
+````
+
+El perfil en ambas gráficas es "idéntico", sólo que en el segundo caso las barras están pegadas. ¿Será correcto?
+
+Podemos pensar que los valores de esta variable discreta son como las categorías y, por consiguiente, el diagrama de pay sería adecuado:
+
+````{r}
+
+par(mfrow=c(1,2))
+pie(round(tabla_estac,digits=2),labels=paste(c("1","2","3","4"),tabla_estac,sep=": "),col=palette("Alphabet"),radius=1)
+title("Diagrama de pay - número de estaciones \n (Frecuencias absolutas)")
+
+pie(tablar_estac,labels=paste(c("1","2","3","4"),
+                               tablar_estac,sep=": "),col=topo.colors(8),radius=1)
+title("Diagrama de pay - número de estaciones \n (Frecuencias relativas)")
+
+````
+
+Por tratarse de una variable cuantitativa es posible representar sus valores mediante un diagrama de puntos (*dotplot*).
+
+````{r}
+dotchart(num.estac,cex=0.8,groups=as.factor(TipoViento),
+         xlab="Número de estaciones",main="Diagrama de puntos")  # Cleveland dot plot
+
+library(BHH2)
+dotPlot(num.estac,pch=16)
+````
+
+Mejor tratemos con un subconjunto:
+
+````{r}
+num.estac2<- subset(num.estac,num.estac>=35)
+dotchart(num.estac2,cex=0.8,xlab="Número de estaciones",main="Diagrama de puntos")  # Cleveland dot plot
+
+````
+
+¿Y si mejor seleccionamos al azar?
+
+````{r}
+num.estac3<- sample(num.estac,size=60,replace = F)
+dotchart(num.estac3,cex=0.8,xlab="Número de estaciones",main="Diagrama de puntos")  # Cleveland dot plot
+
+````
+
+Otro tipo de gráfica de puntos
+
+````{r}
+
+#install.packages("BHH2")
+library(BHH2)
+
+dotPlot(na.omit(num.estac),main="Diagrama de puntos (muestra aleatoria)",xlab="Número de puntos",pch=16)
+
+````
+
+Analicemos el diagrama de tallo y hojas. Recordemos que en este diagrama se divide a cada observación en dos partes: tallo y hoja.
+
+1. Cuando hay punto decimal, éste se usa como separador.
+2. El problema es cuando se tienen muchos dígitos a la derecha del separador (hojas). Esto es poco práctico, por lo que sólo se considera un decimal, ¿cómo escogemos este único decimal?
+
+**El argumento "scale" permite modificar la longitud del diagrama y con ello tener este único decimal**.
+
+````{r}
+
+stem(num.estac3, scale=1)  # valor por default
+
+````
+
+Los valores que se leen son: 4,4,12,12,12,12,12,..,12,20,20,..
+
+La distribución es asimétrica hacia la izquierda.
+
+
+````{r}
+stem(num.estac3, scale=2)
+
+````
+
+Los valores que se leen son: 4,4,12,12,....,
+
+También se muestra asimetría hacia la izquierda.
+
+
+````{r}
+stem(num.estac3, scale=0.1)
+
+````
+Es más complicado leer los datos y tampoco es posible identificar el perfil de la distribución.
+
+
+Finalmente analizamos el diagrama de caja y brazos:
+
+````{r}
+
+boxplot(num.estac3,horizontal=T,col="yellow",main="Número de estaciones")
+````
+
+
+El diagrama muestra claramente una asimetría hacia la izquierda. El 50% de las veces, a lo más 20 estaciones han medido la concentración de ozono ese día en particular.El 75% de las veces, a lo más 35 estaciones han medido la concetración de ozono y el 25% restante no lo hicieron.
+
+#### Medidas descriptivas
+
+1. Moda
+
+````{r}
+
+library(fdth)
+mfv(num.estac3)
+````
+
+2. Media
+
+````{r}
+
+mean(num.estac3)
+
+````
+
+3. Cuantiles y Amplitud intercuartílica
+
+````{r}
+quantile(num.estac3, probs = c(0.25,0.50,0.75))
+IQR(num.estac3)
+
+````
+
+
+4. Varianza 
+
+````{r}
+
+var(num.estac3); sd(num.estac3)
+
+````
+
+5. Error medio
+
+````{r}
+
+mean(abs(na.omit(num.estac3)-mean(na.omit(num.estac3))))   # error medio (media)
+mean(abs(num.estac3-median(num.estac3)))  # error medio (mediana)
+mean(abs(num.estac3-mfv(num.estac3)))  # error medio (moda) OJO!!!
+
+````
+
+
+6. Coeficiente de variación
+
+````{r}
+
+c.v<- sd(num.estac3)/mean(num.estac3); c.v
+
+````
+
+7. Asimetría y curtosis
+
+A veces es difícil identificar si la distribución de frecuencias es asimétrica o simétrica mediante un histograma o un diagrama de barras. Para ello existen medidas estadísticas que nos permiten saber si el perfil es simétrico o no; además si es un perfil "picudo" o "plano". Estas medidas son: **coeficiente de asimetría** y **coeficiente de curtosis**.
+
+
+a) Coeficiente de asimetría
+
+````{r}
+
+library(agricolae)
+(j3_a<- skewness(num.estac3)) 
+(j3_b<- moments::skewness(num.estac3))  # library(moments)
+
+````
+
+En efecto, el diagrama de barras y el diagrama de caja-brazos mostraron una clara asimetría hacia la izquierda.
+
+b) Coeficiente de curtosis
+
+````{r}
+
+library(agricolae)
+(j4_a<- kurtosis(num.estac3)+3)  # da el exceso de curtosis  
+(j4_b<- moments::kurtosis(num.estac3))  
+````
+
+El número de estaciones está descrito por una distribución "más aplastada" que la distribución normal. 
+
+
+Podemos resumir parte de esta información en:
+
+````{r}
+
+fivenum(num.estac3) # minimum, lower-hinge, median, upper-hinge, maximum)
+
+summary(num.estac3)
+
+````
+
+
+***
+***
+
+**COMENTARIO SOBRE "HINGES"**: es similar a los cuartiles. En conjuntos grandes de datos, la diferencia entre ellos es muy pequeña. Según la definición de Tukey los "hinges" son:
+
+a) Hinges inferior: es la mediana de la mitad inferior de todos los valores a la izquierda de la mediana de los datos.
+
+b) Hinges superior: es la mediana de la mitad superior de todos los valores a la derecha de la mediana de los datos 
+
+Ejemplo 1: n=20 observaciones
+La mediana está en la posición 10.5. La mitad inferior comprende las 
+posiciones 1 hasta 10; mientras que la superior desde la 11 hasta 20.
+
+El "lower hinge" es la mediana de la mitad inferior y sería la posición 5.5. 
+
+El "upper hinge" es la mediana de la mitad superior y sería la posición 5.5 (comenzando desde la posición 11), por lo que a final de cuentas será la posición 15.5.
+
+Ejemplo 2: n=21 observaciones
+
+La mediana está en la posición 11. La mitad inferior comprende las 
+posiciones 1 hasta 11; mientras que la superior desde la 11 hasta 21.
+
+El "lower hinge" es la mediana de la mitad inferior y sería la posición 6. 
+
+El "upper hinge" es la mediana de la mitad superior y sería la posición 6 (comenzando desde la posición 11), por lo que a final de cuentas será la posición 16.
+
+***
+***
+
+### Ozono
+
+#### Análisis tabular y gráfico
+
+Se trata de una variable continua. Así que podemos presentar su resumen mediante una distribución de frecuencias como la correspondiente a una variable cualitativa.
+
+````{r}
+# Tabla de frecuencias
+
+(tabla_oz <- table(Ozono))  # tabla de frecuencias absolutas
+
+(tablar_oz <- prop.table(tabla_oz)) # tabla de frecuencias relativas
+
+````
+
+Una gráfica...
+
+````{r}
+
+barplot(tabla_oz)
+
+````
+
+**COMENTARIO: Se observa que no es útil para este tipo de variable representarlo así, por eso conviene hacer una tabla de frecuencias usando INTERVALOS DE CLASE. **
+
+En R tenemos dos opciones para construir una tabla de frecuencias para datos agrupados.
+
+a) Usando la funcion "hist".
+
+*Sugerencia: revisar primero los valores mínimo y máximo*
+
+````{r}
+
+range(Ozono)   # minimo y maximo
+
+````
+
+Mejor...
+
+````{r}
+
+range(na.omit(Ozono))
+
+````
+
+Ahora sí ya tenemos una idea del rango de las observaciones.
+
+Con ellos, ahora sí definimos los *breaks* del histograma:
+
+````{r}
+
+hist_oz <- hist(Ozono,breaks=seq(1,178,25),plot=F)  # breaks dados por mi
+
+summary(hist_oz)   
+
+````
+
+
+Construimos la correspondiente tabla de frecuencias (muy artesanal):
+
+````{r}
+n <- length(hist_oz$breaks)
+tab_oz <- cbind(hist_oz$breaks[-n],hist_oz$breaks[-1],
+                 hist_oz$counts,
+                 hist_oz$counts/sum(hist_oz$counts),
+                 cumsum(hist_oz$counts),
+                 cumsum(hist_oz$counts/sum(hist_oz$counts)))
+dimnames(tab_oz)[[2]]<-c("Linf","Lsup","f","fr","F","Fr")
+print(tab_oz)
+
+````
+
+
+b) Usando el paquete "fdth"
+
+````{r}
+library(fdth)
+(tabla_cont<- fdt(Ozono,breaks="Scott",start=1,end=170,h=30,
+                  right=T,na.rm=T))
+
+(tabla_cont<- fdt(Ozono,start=floor(min(na.omit(Ozono))),
+                  end=floor(max(na.omit(Ozono))+2),right=T))
+
+(tabla_cont<- fdt(na.omit(Ozono),breaks="FD",right=T))
+
+str(tabla_cont)
+
+````
+
+
+
+Hacemos el histograma:
+
+````{r}
+par(mfrow=c(1,2))
+hist(Ozono,col=rainbow(6), main="Histograma de la concentración \n de ozono en NY", prob=T)
+hist(Ozono,col=rainbow(6), main="Histograma de la concentración \n de ozono en NY", prob=F)
+
+````
+
+El histograma muestra el perfil de la *distribución de probabilidad* que mejor describe a la variable. 
+
+````{r}
+hist(na.omit(Ozono),probability=T,col="grey50",
+     main="Concentración de ozono en NY",
+     xlab="Ozono (ppb)")  # histograma cuyo eje vertical esta en escala
+# de "probabilidades".
+
+lines(density(na.omit(Ozono)),lwd=2,col="blue")   # curva de densidad de probabilidad
+
+
+````
+
+
+````{r}
+
+par(mfrow=c(1,2))
+library(MASS)
+frequency.polygon(na.omit(Ozono),
+                  nclass = nclass.freq(na.omit(Ozono)))
+
+library(UsingR)
+simple.freqpoly(na.omit(Ozono),col=heat.colors(6))
+
+````
+
+**NOTA: si se requieren intervalos desiguales para observar ciertos detalles de interés**
+
+
+````{r}
+
+hist_uneq<- hist(na.omit(Ozono),
+                 breaks = quantile(na.omit(Ozono),0:10/10),col="lightblue",
+                 xlab="Ozono (ppb)",ylab="pi",main="Concentración de ozono en NY")   
+
+hist(na.omit(Ozono),breaks=c(1,seq(10,20,4),50,85,118,180))   # intervalos en puntos arbitrarios
+
+````
+
+
+Aprovechando la tabla de frecuencias con intervalos de clase y su histograma, vale la pena revisar la siguiente gráfica: **ojiva**
+
+````{r}
+library(agricolae)
+
+hist_ozo<- hist(na.omit(Ozono))   # breaks dados por R
+ogive.freq(hist_ozo,main="Ojiva (Ozono)",xlab="Límite superior de
+           la clase",ylab="Pi (%)")   
+# "ogive.freq" requiere al histograma como objeto 
+
+````
+
+¿Cómo se interpreta esta gráfica?
+
+````{r}
+
+# Haremos una grafica interactiva para Markdown. 
+# Primero debemos crear un data.frame con las columnas de la tabla de # frecuencias (requisito de la funcion "plot_ly") 
+
+library(plotly)
+
+h<- data.frame(cbind(tab_oz[,2],tab_oz[,6])); h
+plot_ly(data=h,x= ~tab_oz[,2],y= ~tab_oz[,6], 
+        marker = list(size = 10, color="red"),
+        type = 'scatter', mode = 'lines')%>%
+  layout(title = 'Ojiva (Ozono)', 
+         xaxis = list(title = 'Límite superior'), 
+         yaxis = list(title = 'Pi'),
+         shapes = list(
+                  # linea vertical 
+                  list(type = "line", x0 = 0, x1 = 0, 
+                      y0 = 0, y1 = 1, yref = "paper"),
+                  # linea horizontal 
+                    list(type = "line", x0 = 0, x1 = 10000, 
+                            y0 = 1, y1 = 1, xref = "paper")))
+
+````
+
+
+
+Veamos otras gráficas que ya habíamos realizado en el caso discreto.
+
+
+
+
+
+
+
